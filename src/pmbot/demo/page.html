@@ -1,0 +1,870 @@
+<title>pm-signal-engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a run report. Header and summary first, then one large replay instrument
+   (market list + linked charts), then the evidence sections in a single column. */
+:root {
+  --bg: #f1f2ef;
+  --surface: #fbfbf9;
+  --ink: #15181a;
+  --ink-2: #4e5357;
+  --muted: #7f8386;
+  --grid: #e3e4df;
+  --axis: #c5c7c1;
+  --hair: rgba(21, 24, 26, 0.11);
+  --s1: #2a78d6;        /* model fair / core hours / gated */
+  --s2: #eb6834;        /* off-hours / ungated */
+  --book: #70767a;
+  --book-fill: rgba(112, 118, 122, 0.17);
+  --band: rgba(42, 120, 214, 0.07);
+  --zone: rgba(21, 24, 26, 0.045);
+  --good: #0c7d0c;
+  --bad: #c43535;
+  --chip: #e7e9e4;
+  --code-bg: #e9eae6;
+  --focus: #2a78d6;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e100f; --surface: #181a19; --ink: #eceee9; --ink-2: #b8bcb5; --muted: #8b8f8a;
+    --grid: #262826; --axis: #3a3d3a; --hair: rgba(255, 255, 255, 0.10);
+    --s1: #3987e5; --s2: #d95926; --book: #a2a8a3; --book-fill: rgba(162, 168, 163, 0.16);
+    --band: rgba(57, 135, 229, 0.10); --zone: rgba(255, 255, 255, 0.04);
+    --good: #3cc23c; --bad: #ec6b6b; --chip: #232624; --code-bg: #1f2220; --focus: #6aa8f0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e100f; --surface: #181a19; --ink: #eceee9; --ink-2: #b8bcb5; --muted: #8b8f8a;
+  --grid: #262826; --axis: #3a3d3a; --hair: rgba(255, 255, 255, 0.10);
+  --s1: #3987e5; --s2: #d95926; --book: #a2a8a3; --book-fill: rgba(162, 168, 163, 0.16);
+  --band: rgba(57, 135, 229, 0.10); --zone: rgba(255, 255, 255, 0.04);
+  --good: #3cc23c; --bad: #ec6b6b; --chip: #232624; --code-bg: #1f2220; --focus: #6aa8f0;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 var(--f-body);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1160px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 56px; }
+@media (max-width: 600px) { .wrap { padding-inline: 16px; padding-block: 24px 48px; gap: 44px; } }
+
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(34px, 6vw, 58px); font-weight: 800; font-stretch: 112%; letter-spacing: -0.02em; line-height: 1; }
+h2 { font-size: 24px; font-weight: 700; font-stretch: 106%; letter-spacing: -0.01em; }
+h3 { font-size: 15px; font-weight: 700; font-stretch: 100%; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 12px/1.4 var(--f-mono); color: var(--muted); letter-spacing: 0.02em; }
+.lede { font-size: 17px; color: var(--ink-2); max-width: 66ch; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--f-mono); }
+.num { font-variant-numeric: tabular-nums; }
+code { font: 13px/1.5 var(--f-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+
+header { display: grid; gap: 14px; }
+section { display: grid; gap: 18px; min-width: 0; }
+.section-head { display: grid; gap: 8px; }
+
+/* summary tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--hair); border-radius: 10px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.tile .label { font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+.tile .value { font: 700 34px/1.1 var(--f-display); font-stretch: 100%; letter-spacing: -0.01em; }
+.tile .sub { font-size: 13px; color: var(--muted); }
+.key { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.key.s1 { background: var(--s1); } .key.s2 { background: var(--s2); } .key.ink { background: var(--ink); }
+.callout { border-left: 3px solid var(--s1); padding: 4px 0 4px 14px; color: var(--ink-2); max-width: 74ch; }
+
+/* replay instrument */
+.replay { display: grid; grid-template-columns: 250px minmax(0, 1fr); background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+.mlist { border-right: 1px solid var(--hair); padding: 12px; display: grid; gap: 14px; align-content: start; }
+.mgroup { display: grid; gap: 6px; }
+.mgroup h3 { font-size: 12px; font-weight: 600; color: var(--muted); font-family: var(--f-body); letter-spacing: 0.04em; text-transform: uppercase; padding: 0 6px; display: flex; gap: 8px; align-items: center; }
+.mbtn { all: unset; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+.mbtn:hover { background: var(--chip); }
+.mbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.mbtn[aria-pressed="true"] { background: var(--bg); border-color: var(--hair); }
+.mbtn .id { font: 500 13px/1.3 var(--f-mono); }
+.mbtn .when { font-size: 12px; color: var(--muted); }
+.mbtn .pnl { font: 600 13px/1.3 var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.mbtn .tags { font-size: 11px; color: var(--muted); grid-column: 1 / -1; }
+.mbtn .id { white-space: nowrap; }
+.stage { padding: 16px 18px 18px; display: grid; gap: 14px; min-width: 0; }
+.stage-head { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; justify-content: space-between; }
+.stage-title { font: 700 18px/1.3 var(--f-display); font-stretch: 104%; }
+.stage-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink-2); }
+.pill.good { color: var(--good); } .pill.bad { color: var(--bad); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.btn { font: 600 13px/1 var(--f-body); color: var(--surface); background: var(--ink); border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--hair); }
+.btn:hover { filter: brightness(1.15); }
+.btn:focus-visible, input[type="range"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.scrub { flex: 1 1 220px; min-width: 0; accent-color: var(--s1); }
+.clock { font: 500 13px/1 var(--f-mono); color: var(--ink-2); font-variant-numeric: tabular-nums; min-width: 15ch; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px 16px; padding: 10px 12px; background: var(--bg); border-radius: 8px; }
+.readout div { display: grid; gap: 1px; min-width: 0; }
+.readout .k { font-size: 11px; color: var(--muted); letter-spacing: 0.03em; text-transform: uppercase; }
+.readout .v { font: 500 14px/1.3 var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.charts { display: grid; gap: 6px; }
+.chart-cap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; align-items: baseline; font-size: 12px; color: var(--muted); }
+.chart-cap strong { color: var(--ink-2); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.lg-line { width: 16px; height: 2px; border-radius: 2px; display: inline-block; }
+.lg-band { width: 16px; height: 10px; border-radius: 2px; display: inline-block; background: var(--book-fill); border-top: 1.5px solid var(--book); }
+.lg-tri { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--ink); display: inline-block; }
+.lg-ring { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink); display: inline-block; }
+.chart { width: 100%; position: relative; touch-action: pan-y; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart.scrubbable svg { cursor: ew-resize; }
+
+/* svg tokens */
+.ax text, .lbl { fill: var(--muted); font: 11px var(--f-mono); font-variant-numeric: tabular-nums; }
+.lbl.ink { fill: var(--ink-2); }
+.lbl.strong { fill: var(--ink); font-weight: 500; }
+.grid line { stroke: var(--grid); stroke-width: 1; }
+.base { stroke: var(--axis); stroke-width: 1; }
+.zone { fill: var(--zone); }
+.band { fill: var(--band); }
+.bookfill { fill: var(--book-fill); }
+.bookline { stroke: var(--book); stroke-width: 1.5; fill: none; }
+.bookedge { stroke: var(--book); stroke-width: 1; fill: none; opacity: 0.55; }
+.fair { stroke: var(--s1); stroke-width: 2; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.under { stroke: var(--ink-2); stroke-width: 1.5; fill: none; stroke-linejoin: round; }
+.strike { stroke: var(--axis); stroke-width: 1; }
+.cursor { stroke: var(--ink); stroke-width: 1; opacity: 0.6; }
+.lens { fill: var(--band); stroke: var(--s1); stroke-width: 1; stroke-opacity: 0.5; }
+.fillmk { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.ordermk { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.link { stroke: var(--ink); stroke-width: 1; opacity: 0.45; }
+.l1 { stroke: var(--s1); stroke-width: 2; fill: none; stroke-linejoin: round; }
+.l2 { stroke: var(--s2); stroke-width: 2; fill: none; stroke-linejoin: round; }
+.f1 { fill: var(--s1); } .f2 { fill: var(--s2); }
+.dot1 { fill: var(--s1); stroke: var(--surface); stroke-width: 2; }
+.dot2 { fill: var(--s2); stroke: var(--surface); stroke-width: 2; }
+.meanmk { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.hit { fill: transparent; }
+
+.panel { background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; padding: 16px 18px; display: grid; gap: 10px; min-width: 0; align-content: start; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 860px) {
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .replay { grid-template-columns: minmax(0, 1fr); }
+  .mlist { order: 2; border-right: 0; border-top: 1px solid var(--hair); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+
+/* tables */
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; padding: 6px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.r, th.r { text-align: right; }
+td.m { font-family: var(--f-mono); font-size: 12.5px; }
+tbody tr:last-child td { border-bottom: 0; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--bg); }
+tr.click:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.why { display: inline-flex; gap: 4px; flex-wrap: nowrap; }
+.why span { font: 500 11px/1.4 var(--f-mono); background: var(--chip); border-radius: 4px; padding: 1px 5px; color: var(--ink-2); }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+details summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+details[open] summary { margin-bottom: 8px; }
+
+.funnel { display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: baseline; font-size: 13px; color: var(--ink-2); }
+.funnel b { font: 700 20px/1.1 var(--f-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.funnel .arrow { color: var(--muted); padding: 0 4px; }
+.funnel > span { display: inline-flex; gap: 6px; align-items: baseline; }
+.loglist { display: grid; gap: 4px; font-size: 13px; margin: 0; padding: 0; list-style: none; }
+.loglist li { display: grid; grid-template-columns: 8ch 9ch minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.loglist .t { font: 500 12px var(--f-mono); color: var(--muted); }
+.loglist .pill { justify-self: start; }
+.code { font: 13px/1.7 var(--f-mono); background: var(--code-bg); border-radius: 10px; padding: 14px 16px; overflow-x: auto; white-space: pre; color: var(--ink); }
+.code .c { color: var(--muted); }
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--ink); color: var(--surface); font: 12px/1.45 var(--f-body); padding: 7px 10px; border-radius: 6px; max-width: 260px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); }
+#tip b { font-weight: 600; }
+#tip .m { font-family: var(--f-mono); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<!--BODY-->
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow">Simulation replay</div>
+    <h1>pm-signal-engine</h1>
+    <p class="lede">An event-driven trading engine for 15-minute crypto prediction markets. It prices each contract from the live underlying and buys when the order book hasn't caught up yet. Everything on this page comes from a seeded simulator. The engine is a clean-room template of a system I ran from December 2025 to April 2026.</p>
+  </header>
+
+  <section aria-labelledby="sum-h">
+    <h2 id="sum-h" hidden>Summary</h2>
+    <div class="tiles" id="tiles"></div>
+    <p class="callout" id="callout"></p>
+  </section>
+
+  <section aria-labelledby="rp-h">
+    <div class="section-head">
+      <h2 id="rp-h">Replay a market</h2>
+      <p class="muted">Pick a market and press Play. The blue line is the engine's fair price, computed from the live underlying. The gray band is the order book's best bid and ask. The engine trades when blue leaves the band and the book is slow to follow. The lens zooms to 45 seconds either side of the cursor, where the lag is visible.</p>
+    </div>
+    <div class="replay">
+      <nav class="mlist" id="mlist" aria-label="Markets"></nav>
+      <div class="stage">
+        <div class="stage-head">
+          <div class="stage-title" id="st-title"></div>
+          <div class="stage-facts" id="st-facts"></div>
+        </div>
+        <div class="controls">
+          <button class="btn" id="play" type="button" aria-label="Play">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path id="play-icon" d="M2 1 L11 6 L2 11 Z" fill="currentColor"></path></svg>
+            <span id="play-lbl">Play</span>
+          </button>
+          <button class="btn ghost" id="next" type="button">Next trade</button>
+          <input class="scrub" id="scrub" type="range" min="0" max="899" step="1" value="0" aria-label="Seconds into the market">
+          <span class="clock" id="clock"></span>
+        </div>
+        <div class="readout" id="readout"></div>
+        <div class="charts">
+          <div class="chart-cap"><strong>Whole market, YES price</strong>
+            <div class="legend">
+              <span><i class="lg-line" style="background:var(--s1)"></i>Model fair</span>
+              <span><i class="lg-band"></i>Book bid–ask</span>
+              <span><i class="lg-tri"></i>Fill</span>
+            </div>
+          </div>
+          <div class="chart scrubbable" id="rp-full"></div>
+        </div>
+        <div class="charts">
+          <div class="chart-cap"><strong>Lens, ±45 s around the cursor</strong>
+            <div class="legend"><span><i class="lg-ring"></i>Order sent</span><span><i class="lg-tri"></i>Filled</span></div>
+          </div>
+          <div class="chart" id="rp-zoom"></div>
+        </div>
+        <div class="charts">
+          <div class="chart-cap"><strong>Underlying price vs. strike</strong><span id="under-cap"></span></div>
+          <div class="chart scrubbable" id="rp-under"></div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>At</th><th>Order</th><th class="r">Filled</th><th class="r">5 s</th><th class="r">30 s</th><th>Why</th><th class="r">P&amp;L</th></tr></thead>
+            <tbody id="tradelog"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="edge-h">
+    <div class="section-head">
+      <h2 id="edge-h">Where the edge is</h2>
+      <p class="muted" id="edge-p"></p>
+    </div>
+    <div class="two">
+      <div class="panel">
+        <div class="chart-cap"><strong>Cumulative P&amp;L, same simulated world</strong>
+          <div class="legend"><span><i class="lg-line" style="background:var(--s1)"></i>Gated (09:30–16:00)</span><span><i class="lg-line" style="background:var(--s2)"></i>Ungated (all hours)</span></div>
+        </div>
+        <div class="chart" id="equity"></div>
+        <div class="chart-cap"><span>Shaded: core hours, 09:30–16:00 ET</span></div>
+      </div>
+      <div class="panel">
+        <div class="chart-cap"><strong>Markout 5 s after fill, by half hour (ungated run)</strong>
+          <div class="legend"><span><i class="key s1"></i>Core hours</span><span><i class="key s2"></i>Off-hours</span></div>
+        </div>
+        <div class="chart" id="halfhours"></div>
+        <details><summary>Table view</summary><div class="tbl-wrap"><table><thead><tr><th>Half hour</th><th>Regime</th><th class="r">Fills</th><th class="r">Markout 5 s</th><th class="r">P&amp;L</th></tr></thead><tbody id="hh-table"></tbody></table></div></details>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="seeds-h" id="seeds-sec">
+    <div class="section-head">
+      <h2 id="seeds-h">Across simulated worlds</h2>
+      <p class="muted" id="seeds-p"></p>
+    </div>
+    <div class="two">
+      <div class="panel">
+        <div class="chart-cap"><strong>Markout 5 s after fill, cents per contract</strong></div>
+        <div class="chart" id="seeds-mk"></div>
+      </div>
+      <div class="panel">
+        <div class="chart-cap"><strong>Two-day return per dollar risked</strong></div>
+        <div class="chart" id="seeds-ret"></div>
+      </div>
+    </div>
+    <details><summary>Table view</summary><div class="tbl-wrap"><table><thead><tr><th>Seed</th><th class="r">Gated markout</th><th class="r">Gated return</th><th class="r">Ungated off-hours markout</th><th class="r">Ungated return</th><th>Monitor switched off (ungated)</th></tr></thead><tbody id="seeds-table"></tbody></table></div></details>
+  </section>
+
+  <section aria-labelledby="eng-h">
+    <div class="section-head">
+      <h2 id="eng-h">Inside the engine</h2>
+      <p class="muted">Every event goes through one loop: update state, evaluate signals, combine, size, check risk, send. These counts are from the gated run.</p>
+    </div>
+    <div class="panel"><h3>Decision funnel</h3><div class="funnel" id="funnel"></div><div class="muted" style="font-size:13px" id="blocked"></div></div>
+    <div class="two">
+      <div class="panel">
+        <h3>Signals, judged on the fills each one argued for</h3>
+        <div class="tbl-wrap"><table><thead><tr><th>Signal</th><th class="r">Fills</th><th class="r">Markout 5 s</th><th class="r">30 s</th><th class="r">Return per $</th></tr></thead><tbody id="sig-table"></tbody></table></div>
+      </div>
+      <div class="panel">
+        <h3>Decay monitor, ungated run</h3>
+        <p class="muted" style="font-size:13px">It judges each signal per regime on markouts. A signal confidently below zero is switched off for six hours, then gets a fresh trial.</p>
+        <ul class="loglist" id="monitor"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="run-h">
+    <h2 id="run-h">Run it yourself</h2>
+    <div class="code"><span class="c"># standard library only, Python 3.10+</span>
+pip install -e ".[dev]"
+python -m pmbot.cli                <span class="c"># two simulated days, text report</span>
+python -m pmbot.cli --no-regime    <span class="c"># trade every hour and compare</span>
+python -m pmbot.demo --seeds 10    <span class="c"># rebuild this page</span>
+pytest</div>
+    <footer>
+      <p>Simulated data. The simulator's parameters are invented so each mechanism is visible, so none of these numbers describe real markets. The production system's code, tuned parameters and account lists are not part of this repository.</p>
+      <p id="gen"></p>
+    </footer>
+  </section>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const DATA = /*__DEMO_DATA__*/null;
+
+(() => {
+  if (!DATA) { document.querySelector(".wrap").insertAdjacentHTML("afterbegin", "<p>No data embedded. Build this page with <code>python -m pmbot.demo</code>.</p>"); return; }
+
+  const NS = "http://www.w3.org/2000/svg";
+  const MINUS = "−";
+  const G = DATA.runs.gated.summary, U = DATA.runs.ungated.summary;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------------------------------------------------------------- helpers
+  const $ = (s) => document.querySelector(s);
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function txt(parent, x, y, s, cls, anchor) {
+    const t = el("text", { x, y, class: cls || "lbl", "text-anchor": anchor || "start" }, parent);
+    t.textContent = s;
+    return t;
+  }
+  function scale(d0, d1, r0, r1) {
+    const k = (r1 - r0) / ((d1 - d0) || 1);
+    const f = (v) => r0 + (v - d0) * k;
+    f.inv = (p) => d0 + (p - r0) / k;
+    return f;
+  }
+  function niceStep(span, n) {
+    const raw = span / Math.max(1, n), p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+  }
+  function ticks(lo, hi, n) {
+    const st = niceStep(hi - lo, n || 4), out = [];
+    for (let v = Math.ceil(lo / st - 1e-9) * st; v <= hi + 1e-9; v += st) out.push(+v.toFixed(10));
+    return out;
+  }
+  const sign = (v) => (v < 0 ? MINUS : v > 0 ? "+" : "");
+  const money = (v) => sign(v) + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cents = (v, d = 2) => (v == null ? "–" : sign(v) + Math.abs(v).toFixed(d) + "¢");
+  const pct = (v, d = 1) => sign(v) + Math.abs(v * 100).toFixed(d) + "%";
+  const px = (v) => (v == null ? "–" : v.toFixed(2));
+  const num = (v) => v.toLocaleString("en-US");
+  const mmss = (s) => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+  const cls = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
+  const SIG = { lag_momentum: "lag", cross_market: "cross", order_flow: "flow", manual: "manual" };
+  function width(node) { return Math.max(280, Math.round(node.getBoundingClientRect().width)); }
+  function svgFor(node, h) {
+    const w = width(node);
+    node.textContent = "";
+    const svg = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img" }, node);
+    return { svg, w, h };
+  }
+  function pathOf(xs, ys) {
+    let d = "", pen = false;
+    for (let i = 0; i < xs.length; i++) {
+      if (ys[i] == null || Number.isNaN(ys[i])) { pen = false; continue; }
+      d += (pen ? "L" : "M") + xs[i].toFixed(1) + " " + ys[i].toFixed(1);
+      pen = true;
+    }
+    return d;
+  }
+
+  // tooltip
+  const tip = $("#tip");
+  function showTip(evt, html) {
+    tip.innerHTML = html; tip.hidden = false;
+    const r = tip.getBoundingClientRect(), pad = 12;
+    let x = evt.clientX + pad, y = evt.clientY + pad;
+    if (x + r.width > window.innerWidth - 8) x = evt.clientX - r.width - pad;
+    if (y + r.height > window.innerHeight - 8) y = evt.clientY - r.height - pad;
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+  }
+  const hideTip = () => { tip.hidden = true; };
+
+  // ---------------------------------------------------------------- header + tiles
+  const meta = DATA.meta;
+  const endDay = meta.days >= 1 ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][Math.min(6, Math.ceil(meta.days) - 1)] : meta.start_weekday;
+  $("#eyebrow").textContent = `Simulation replay · seed ${meta.seed} · ${meta.days} simulated days from ${meta.start} · ${meta.latency_s} s order latency`;
+
+  const gMk = G.total.markout_c["5"], gMk30 = G.total.markout_c["30"];
+  const uOff = (U.by_regime.off_hours || { markout_c: {} });
+  const offMk = uOff.markout_c["5"];
+  const tiles = [
+    { key: "s1", label: "Markout 5 s after fill, core hours", value: cents(gMk), sub: `Gated run, per contract. Book moved our way. At 30 s: ${cents(gMk30)}.` },
+    { key: "s2", label: "Markout 5 s after fill, off-hours", value: cents(offMk), sub: `Ungated run, per contract. Book moved against us.` },
+    { key: null, label: "Net P&L, gated run", value: money(G.total.pnl), sub: `${pct(G.total.ret_per_dollar)} on ${money(G.total.cost).replace("+", "")} risked · ${num(G.total.trades)} fills in ${G.markets_traded} markets` },
+    { key: null, label: "Decision time per event", value: `${G.engine.decision_ms_p50.toFixed(2)} ms`, sub: `Median; p99 ${G.engine.decision_ms_p99.toFixed(2)} ms. Orders reach the book ${meta.latency_s} s later.` },
+  ];
+  $("#tiles").innerHTML = tiles.map((t) => `<div class="tile"><div class="label">${t.key ? `<i class="key ${t.key}"></i>` : ""}${t.label}</div><div class="value">${t.value}</div><div class="sub">${t.sub}</div></div>`).join("");
+
+  const seeds = DATA.seeds || [];
+  const seedLine = seeds.length
+    ? ` Markouts split cleanly by time of day in all ${seeds.filter((r) => r.gated.markout_c["5"] > 0 && ((r.ungated.by_regime.off_hours || {}).markout_c || {})["5"] < 0).length} of ${seeds.length} simulated worlds below.`
+    : "";
+  $("#callout").textContent = `Two days of P&L is mostly noise here, because every position is a 15-minute yes-or-no bet held to resolution. A markout compares each fill with where the book traded a few seconds later. It measures the one thing the engine is built to find: a book that hasn't repriced yet.${seedLine}`;
+
+  // ---------------------------------------------------------------- replay
+  const markets = DATA.markets;
+  const LEN = meta.market_len_s;
+  const ENTRY_DELAY = 300, CUTOFF = 45, LENS = 45;
+  let cur = null, t = 0, playing = false, raf = 0, lastTs = 0;
+
+  const groups = [
+    { run: "gated", title: "Gated run · core hours", key: "s1" },
+    { run: "ungated", title: "Ungated run · off-hours", key: "s2" },
+  ];
+  // list rows show P&L, then the 5 s markout and the signals behind the trades
+  $("#mlist").innerHTML = groups.map((g) => {
+    const ms = markets.filter((m) => m.run === g.run);
+    if (!ms.length) return "";
+    return `<div class="mgroup"><h3><i class="key ${g.key}"></i>${g.title}</h3>${ms.map((m) => {
+      const i = markets.indexOf(m);
+      const sigs = (m.mk5_c != null ? `5 s ${cents(m.mk5_c, 1)} · ` : "") + m.signals.map((s) => SIG[s] || s).join(" + ");
+      return `<button class="mbtn" type="button" data-i="${i}" aria-pressed="false"><span class="id">${m.id}</span><span class="pnl ${cls(m.pnl)}">${money(m.pnl)}</span><span class="when">${m.opens} ET</span><span class="tags">${sigs}</span></button>`;
+    }).join("")}</div>`;
+  }).join("");
+  document.querySelectorAll(".mbtn").forEach((b) => b.addEventListener("click", () => select(+b.dataset.i)));
+
+  function yesPrice(f) { return f.side === "YES" ? f.price : 1 - f.price; }
+  function orderYes(o) { return o.side === "YES" ? o.entry : 1 - o.entry; }
+  function startLabel(m, s) {
+    const [d, hm] = m.opens.split(" "), [h, mi] = hm.split(":").map(Number);
+    const tot = h * 3600 + mi * 60 + Math.round(s);
+    const hh = Math.floor(tot / 3600) % 24, mm = Math.floor(tot / 60) % 60, ss = tot % 60;
+    return `${d} ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
+
+  function select(i) {
+    cur = markets[i];
+    document.querySelectorAll(".mbtn").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
+    const m = cur;
+    const won = m.pnl >= 0;
+    $("#st-title").textContent = `${m.underlying} · opens ${m.opens} ET`;
+    $("#st-facts").innerHTML = `<span>Strike <span class="mono">${m.strike.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></span><span>Close <span class="mono">${m.close.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></span><span>Resolved <b>${m.outcome}</b></span><span class="pill ${won ? "good" : "bad"}">${won ? "▲" : "▼"} ${money(m.pnl)} on ${money(m.cost).replace("+", "")}</span>`;
+    $("#under-cap").textContent = m.underlying;
+    renderLog();
+    const first = m.orders.length ? m.orders[0].t : ENTRY_DELAY;
+    setT(Math.max(0, first - 20), true);
+  }
+
+  function setT(v, redrawAll) {
+    t = Math.min(LEN - 1, Math.max(0, v));
+    $("#scrub").value = Math.round(t);
+    if (redrawAll) { drawFull(); drawUnder(); }
+    else { moveCursors(); }
+    drawZoom();
+    readout();
+  }
+
+  function readout() {
+    const m = cur, i = Math.min(m.fair.length - 1, Math.floor(t));
+    const fair = m.fair[i], bid = m.bid[i], ask = m.ask[i], u = m.under[i];
+    let gap = "inside the spread";
+    if (fair != null && fair - ask > 0.005) gap = `YES ${cents(100 * (fair - ask), 1)} cheap`;
+    else if (fair != null && bid - fair > 0.005) gap = `NO ${cents(100 * (bid - fair), 1)} cheap`;
+    const du = u - m.strike;
+    $("#clock").textContent = `${startLabel(m, t).slice(4)} · ${mmss(LEN - t)} left`;
+    $("#readout").innerHTML = [
+      ["Model fair", fair == null ? "warming up" : fair.toFixed(3)],
+      ["Book bid / ask", `${px(bid)} / ${px(ask)}`],
+      ["Model vs book", gap],
+      ["Underlying", `${u.toLocaleString("en-US", { minimumFractionDigits: 2 })}`],
+      ["Vs strike", `${sign(du)}${Math.abs(du).toFixed(2)}`],
+    ].map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+  }
+
+  // full-market chart
+  let fullGeom = null, underGeom = null;
+  function drawFull() {
+    const node = $("#rp-full"), m = cur;
+    const { svg, w, h } = svgFor(node, 210);
+    const L = 34, R = 10, T = 8, B = 22;
+    const x = scale(0, LEN, L, w - R), y = scale(0, 1, h - B, T);
+    fullGeom = { x, y, svg, L, R, T, B, w, h };
+    svg.setAttribute("aria-label", `YES price over the ${m.id} market`);
+    el("rect", { x: x(0), y: T, width: x(ENTRY_DELAY) - x(0), height: h - B - T, class: "zone" }, svg);
+    el("rect", { x: x(LEN - CUTOFF), y: T, width: x(LEN) - x(LEN - CUTOFF), height: h - B - T, class: "zone" }, svg);
+    txt(svg, x(4), T + 12, "no entries yet", "lbl");
+    const g = el("g", { class: "grid" }, svg), ax = el("g", { class: "ax" }, svg);
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      el("line", { x1: L, x2: w - R, y1: y(v), y2: y(v) }, g);
+      txt(ax, L - 6, y(v) + 4, v.toFixed(2), "lbl", "end");
+    }
+    for (let s = 0; s <= LEN; s += 180) txt(ax, x(s), h - 6, `${s / 60}m`, "lbl", s === 0 ? "start" : s === LEN ? "end" : "middle");
+    const xs = m.bid.map((_, i) => x(i));
+    let band = "";
+    for (let i = 0; i < m.ask.length; i++) band += (i ? "L" : "M") + xs[i].toFixed(1) + " " + y(m.ask[i]).toFixed(1);
+    for (let i = m.bid.length - 1; i >= 0; i--) band += "L" + xs[i].toFixed(1) + " " + y(m.bid[i]).toFixed(1);
+    el("path", { d: band + "Z", class: "bookfill" }, svg);
+    el("path", { d: pathOf(xs, m.bid.map((b, i) => y((b + m.ask[i]) / 2))), class: "bookline" }, svg);
+    el("path", { d: pathOf(xs, m.fair.map((f) => (f == null ? null : y(f)))), class: "fair" }, svg);
+    fullGeom.lens = el("rect", { y: T, height: h - B - T, class: "lens" }, svg);
+    for (const f of m.fills) tri(svg, x(f.t), y(yesPrice(f)), f.side, 5);
+    fullGeom.cursor = el("line", { y1: T, y2: h - B, class: "cursor" }, svg);
+    moveCursors();
+  }
+  function tri(svg, cx, cy, side, r) {
+    const d = side === "YES" ? `M${cx} ${cy - r} L${cx + r} ${cy + r * 0.8} L${cx - r} ${cy + r * 0.8} Z` : `M${cx} ${cy + r} L${cx + r} ${cy - r * 0.8} L${cx - r} ${cy - r * 0.8} Z`;
+    return el("path", { d, class: "fillmk" }, svg);
+  }
+
+  function drawUnder() {
+    const node = $("#rp-under"), m = cur;
+    const { svg, w, h } = svgFor(node, 120);
+    const L = 64, R = 46, T = 8, B = 20;
+    const vals = m.under.filter((v) => v != null).concat([m.strike]);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const padv = (hi - lo) * 0.08 || 1; lo -= padv; hi += padv;
+    const x = scale(0, LEN, L, w - R), y = scale(lo, hi, h - B, T);
+    underGeom = { x, svg, T, B, h };
+    svg.setAttribute("aria-label", `${m.underlying} price against the strike`);
+    const g = el("g", { class: "grid" }, svg), ax = el("g", { class: "ax" }, svg);
+    for (const v of ticks(lo, hi, 3)) {
+      el("line", { x1: L, x2: w - R, y1: y(v), y2: y(v) }, g);
+      txt(ax, L - 6, y(v) + 4, v.toLocaleString("en-US", { maximumFractionDigits: v > 1000 ? 0 : 1 }), "lbl", "end");
+    }
+    el("line", { x1: L, x2: w - R, y1: y(m.strike), y2: y(m.strike), class: "strike" }, svg);
+    txt(svg, w - R + 6, y(m.strike) + 4, "strike", "lbl ink");
+    el("path", { d: pathOf(m.under.map((_, i) => x(i)), m.under.map((v) => (v == null ? null : y(v)))), class: "under" }, svg);
+    underGeom.cursor = el("line", { y1: T, y2: h - B, class: "cursor" }, svg);
+    for (let s = 0; s <= LEN; s += 180) txt(ax, x(s), h - 5, `${s / 60}m`, "lbl", s === 0 ? "start" : s === LEN ? "end" : "middle");
+    moveCursors();
+  }
+
+  function moveCursors() {
+    if (fullGeom && fullGeom.cursor) {
+      const { x } = fullGeom;
+      fullGeom.cursor.setAttribute("x1", x(t)); fullGeom.cursor.setAttribute("x2", x(t));
+      const a = Math.max(0, t - LENS), b = Math.min(LEN, t + LENS);
+      fullGeom.lens.setAttribute("x", x(a)); fullGeom.lens.setAttribute("width", Math.max(0, x(b) - x(a)));
+    }
+    if (underGeom && underGeom.cursor) {
+      underGeom.cursor.setAttribute("x1", underGeom.x(t)); underGeom.cursor.setAttribute("x2", underGeom.x(t));
+    }
+  }
+
+  function drawZoom() {
+    const node = $("#rp-zoom"), m = cur;
+    const { svg, w, h } = svgFor(node, 230);
+    const L = 40, R = 52, T = 10, B = 22;
+    let a = Math.max(0, t - LENS), b = Math.min(LEN - 1, t + LENS);
+    if (b - a < 2 * LENS) { if (a === 0) b = Math.min(LEN - 1, 2 * LENS); else a = Math.max(0, b - 2 * LENS); }
+    const i0 = Math.floor(a), i1 = Math.ceil(b);
+    const vals = [];
+    for (let i = i0; i <= i1; i++) { vals.push(m.bid[i], m.ask[i]); if (m.fair[i] != null) vals.push(m.fair[i]); }
+    const fl = m.fills.filter((f) => f.t >= a && f.t <= b), od = m.orders.filter((o) => o.t >= a && o.t <= b);
+    fl.forEach((f) => vals.push(yesPrice(f))); od.forEach((o) => vals.push(orderYes(o)));
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const span = Math.max(0.08, hi - lo), mid = (lo + hi) / 2;
+    lo = Math.max(0, mid - span * 0.6); hi = Math.min(1, mid + span * 0.6);
+    const x = scale(a, b, L, w - R), y = scale(lo, hi, h - B, T);
+    svg.setAttribute("aria-label", "Model fair price and order book around the cursor");
+    const g = el("g", { class: "grid" }, svg), ax = el("g", { class: "ax" }, svg);
+    for (const v of ticks(lo, hi, 4)) {
+      el("line", { x1: L, x2: w - R, y1: y(v), y2: y(v) }, g);
+      txt(ax, L - 6, y(v) + 4, v.toFixed(2), "lbl", "end");
+    }
+    const step = w < 480 ? 30 : 15;
+    for (let rel = -2 * LENS; rel <= 2 * LENS; rel += step) {
+      const s = t + rel;
+      if (s < a - 1e-6 || s > b + 1e-6) continue;
+      txt(ax, x(s), h - 6, rel === 0 ? "now" : `${rel > 0 ? "+" : MINUS}${Math.abs(rel)}s`, "lbl", "middle");
+    }
+    const idx = []; for (let i = i0; i <= i1; i++) idx.push(i);
+    const xs = idx.map((i) => x(i));
+    let band = "";
+    idx.forEach((i, k) => { band += (k ? "L" : "M") + xs[k].toFixed(1) + " " + y(m.ask[i]).toFixed(1); });
+    for (let k = idx.length - 1; k >= 0; k--) band += "L" + xs[k].toFixed(1) + " " + y(m.bid[idx[k]]).toFixed(1);
+    el("path", { d: band + "Z", class: "bookfill" }, svg);
+    // step lines for the book: quotes are discrete
+    const stepPath = (arr) => { let d = ""; idx.forEach((i, k) => { const yy = y(arr[i]).toFixed(1); d += k ? `L${xs[k].toFixed(1)} ${y(arr[idx[k - 1]]).toFixed(1)}L${xs[k].toFixed(1)} ${yy}` : `M${xs[k].toFixed(1)} ${yy}`; }); return d; };
+    el("path", { d: stepPath(m.ask), class: "bookedge" }, svg);
+    el("path", { d: stepPath(m.bid), class: "bookedge" }, svg);
+    el("path", { d: pathOf(xs, idx.map((i) => (m.fair[i] == null ? null : y(m.fair[i])))), class: "fair" }, svg);
+    // end labels
+    const lastFair = m.fair[i1], lastMid = (m.bid[i1] + m.ask[i1]) / 2;
+    if (lastFair != null) {
+      let yf = y(lastFair), yb = y(lastMid);
+      if (Math.abs(yf - yb) < 13) { if (yf < yb) { yf -= (13 - (yb - yf)) / 2; yb = yf + 13; } else { yb -= (13 - (yf - yb)) / 2; yf = yb + 13; } }
+      txt(svg, w - R + 6, yf + 4, "model", "lbl strong");
+      txt(svg, w - R + 6, yb + 4, "book", "lbl ink");
+    }
+    // orders and fills
+    for (const o of od) {
+      const f = m.fills.find((q) => q.order === o.id);
+      if (f) el("line", { x1: x(o.t), y1: y(orderYes(o)), x2: x(f.t), y2: y(yesPrice(f)), class: "link" }, svg);
+      el("circle", { cx: x(o.t), cy: y(orderYes(o)), r: 4.5, class: "ordermk" }, svg);
+    }
+    for (const f of fl) tri(svg, x(f.t), y(yesPrice(f)), f.side, 6);
+    el("line", { x1: x(t), x2: x(t), y1: T, y2: h - B, class: "cursor" }, svg);
+    // hover readout
+    const hit = el("rect", { x: L, y: T, width: w - R - L, height: h - B - T, class: "hit" }, svg);
+    hit.addEventListener("pointermove", (e) => {
+      const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) * (w / r.width);
+      const i = Math.round(Math.min(i1, Math.max(i0, x.inv(sx))));
+      const fair = m.fair[i];
+      showTip(e, `<b>${startLabel(m, i).slice(4)}</b><br>Model fair <span class="m">${fair == null ? "–" : fair.toFixed(3)}</span><br>Book <span class="m">${px(m.bid[i])} / ${px(m.ask[i])}</span>`);
+    });
+    hit.addEventListener("pointerleave", hideTip);
+  }
+
+  function renderLog() {
+    const m = cur;
+    const rows = m.orders.map((o) => {
+      const fs = m.fills.filter((f) => f.order === o.id);
+      const size = fs.reduce((s, f) => s + f.size, 0);
+      const avg = size ? fs.reduce((s, f) => s + f.price * f.size, 0) / size : null;
+      const mk = (h) => { const w = fs.filter((f) => f.markouts[h] != null); const sz = w.reduce((s, f) => s + f.size, 0); return sz ? (100 * w.reduce((s, f) => s + f.markouts[h] * f.size, 0)) / sz : null; };
+      const pnl = fs.reduce((s, f) => s + f.pnl, 0);
+      const why = Object.entries(o.why).filter(([, v]) => v).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))
+        .map(([k, v]) => `<span>${SIG[k] || k} ${sign(v)}${Math.abs(v).toFixed(2)}</span>`).join("");
+      const m5 = mk("5"), m30 = mk("30");
+      return `<tr class="click" tabindex="0" data-t="${o.t}"><td class="m">${mmss(o.t)}</td><td>Buy ${o.side} ≤ ${o.limit.toFixed(2)}</td>`
+        + `<td class="r m">${size ? `${num(size)} @ ${avg.toFixed(3)}` : '<span class="muted">unfilled</span>'}</td>`
+        + `<td class="r m ${cls(m5)}">${size ? cents(m5, 1) : ""}</td><td class="r m ${cls(m30)}">${size ? cents(m30, 1) : ""}</td>`
+        + `<td><span class="why">${why}</span></td><td class="r m ${cls(pnl)}">${size ? money(pnl) : ""}</td></tr>`;
+    });
+    const body = $("#tradelog");
+    body.innerHTML = rows.join("");
+    body.querySelectorAll("tr").forEach((tr) => {
+      const go = () => { pause(); setT(+tr.dataset.t - 15); };
+      tr.addEventListener("click", go);
+      tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+  }
+
+  // scrubbing on the full and underlying charts
+  function bindScrub(node, geomGetter) {
+    let down = false;
+    const at = (e) => {
+      const gm = geomGetter(); if (!gm) return;
+      const r = node.querySelector("svg").getBoundingClientRect();
+      const sx = (e.clientX - r.left) * (gm.w ? gm.w / r.width : 1);
+      pause(); setT(gm.x.inv(sx));
+    };
+    node.addEventListener("pointerdown", (e) => { down = true; node.setPointerCapture(e.pointerId); at(e); });
+    node.addEventListener("pointermove", (e) => { if (down) at(e); });
+    node.addEventListener("pointerup", () => { down = false; });
+    node.addEventListener("pointercancel", () => { down = false; });
+  }
+  bindScrub($("#rp-full"), () => fullGeom);
+  bindScrub($("#rp-under"), () => underGeom && { x: underGeom.x, w: +underGeom.svg.getAttribute("viewBox").split(" ")[2] });
+
+  $("#scrub").addEventListener("input", (e) => { pause(); setT(+e.target.value); });
+  const SPEED = 30; // simulated seconds per real second
+  function frame(ts) {
+    if (!playing) return;
+    const dt = lastTs ? (ts - lastTs) / 1000 : 0; lastTs = ts;
+    if (t >= LEN - 1) { pause(); return; }
+    setT(t + dt * SPEED);
+    raf = requestAnimationFrame(frame);
+  }
+  function play() {
+    if (t >= LEN - 2) setT(0);
+    playing = true; lastTs = 0;
+    $("#play-lbl").textContent = "Pause"; $("#play").setAttribute("aria-label", "Pause");
+    $("#play-icon").setAttribute("d", "M2 1 H5 V11 H2 Z M7 1 H10 V11 H7 Z");
+    raf = requestAnimationFrame(frame);
+  }
+  function pause() {
+    playing = false; cancelAnimationFrame(raf);
+    $("#play-lbl").textContent = "Play"; $("#play").setAttribute("aria-label", "Play");
+    $("#play-icon").setAttribute("d", "M2 1 L11 6 L2 11 Z");
+  }
+  $("#play").addEventListener("click", () => (playing ? pause() : play()));
+  $("#next").addEventListener("click", () => {
+    const nxt = cur.orders.find((o) => o.t > t + 16);
+    pause();
+    setT(nxt ? nxt.t - 15 : (cur.orders.length ? cur.orders[0].t - 15 : 0));
+  });
+
+  // ---------------------------------------------------------------- equity
+  function drawEquity() {
+    const node = $("#equity");
+    const { svg, w, h } = svgFor(node, 240);
+    const L = 56, R = 72, T = 12, B = 24;
+    const eg = DATA.runs.gated.equity, eu = DATA.runs.ungated.equity;
+    const all = eg.concat(eu).map((p) => p[1]).concat([0]);
+    let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.08 || 10; lo -= pad; hi += pad;
+    const x = scale(0, meta.hours, L, w - R), y = scale(lo, hi, h - B, T);
+    svg.setAttribute("aria-label", "Cumulative profit and loss for the gated and ungated runs");
+    for (const [s, e] of DATA.core_bands) el("rect", { x: x(s), y: T, width: x(e) - x(s), height: h - B - T, class: "band" }, svg);
+    const g = el("g", { class: "grid" }, svg), ax = el("g", { class: "ax" }, svg);
+    for (const v of ticks(lo, hi, 4)) { el("line", { x1: L, x2: w - R, y1: y(v), y2: y(v) }, g); txt(ax, L - 6, y(v) + 4, (v < 0 ? MINUS : "") + "$" + Math.abs(v).toLocaleString("en-US"), "lbl", "end"); }
+    el("line", { x1: L, x2: w - R, y1: y(0), y2: y(0), class: "base" }, svg);
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const startIdx = Math.max(0, days.indexOf(meta.start_weekday));
+    const every = w < 480 ? 12 : 6;
+    for (let hr = 0; hr <= meta.hours + 1e-9; hr += every) {
+      const lab = hr % 24 === 0 ? days[(startIdx + hr / 24) % 7] : `${String(hr % 24).padStart(2, "0")}:00`;
+      txt(ax, x(hr), h - 6, lab, "lbl", hr === 0 ? "start" : hr >= meta.hours ? "end" : "middle");
+    }
+    const step = (pts) => { let d = ""; pts.forEach((p, i) => { d += i ? `L${x(p[0]).toFixed(1)} ${y(pts[i - 1][1]).toFixed(1)}L${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}` : `M${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`; }); return d; };
+    el("path", { d: step(eu), class: "l2" }, svg);
+    el("path", { d: step(eg), class: "l1" }, svg);
+    const endG = eg[eg.length - 1][1], endU = eu[eu.length - 1][1];
+    let yG = y(endG), yU = y(endU);
+    if (Math.abs(yG - yU) < 14) { if (yG < yU) { yU = yG + 14; } else { yG = yU + 14; } }
+    el("circle", { cx: x(meta.hours), cy: y(endG), r: 4, class: "dot1" }, svg);
+    el("circle", { cx: x(meta.hours), cy: y(endU), r: 4, class: "dot2" }, svg);
+    txt(svg, w - R + 8, yG + 4, money(endG), "lbl strong");
+    txt(svg, w - R + 8, yU + 4, money(endU), "lbl strong");
+    const cross = el("line", { y1: T, y2: h - B, class: "cursor", visibility: "hidden" }, svg);
+    const hit = el("rect", { x: L, y: T, width: w - R - L, height: h - B - T, class: "hit" }, svg);
+    const valAt = (pts, hr) => { let v = 0; for (const p of pts) { if (p[0] <= hr) v = p[1]; else break; } return v; };
+    hit.addEventListener("pointermove", (e) => {
+      const r = svg.getBoundingClientRect(), hr = x.inv((e.clientX - r.left) * (w / r.width));
+      cross.setAttribute("x1", x(hr)); cross.setAttribute("x2", x(hr)); cross.setAttribute("visibility", "visible");
+      const day = days[(startIdx + Math.floor(hr / 24)) % 7], hh = Math.floor(hr % 24), mm = Math.floor((hr * 60) % 60);
+      showTip(e, `<b>${day} ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}</b><br>Gated <span class="m">${money(valAt(eg, hr))}</span><br>Ungated <span class="m">${money(valAt(eu, hr))}</span>`);
+    });
+    hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+  }
+
+  // ---------------------------------------------------------------- half hours
+  function drawHalfHours() {
+    const node = $("#halfhours");
+    const rows = DATA.runs.ungated.half_hours || [];
+    const { svg, w, h } = svgFor(node, 240);
+    const L = 44, R = 10, T = 12, B = 24;
+    const vals = rows.map((r) => r.mk5_c).filter((v) => v != null).concat([0]);
+    let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.1 || 1; lo -= pad; hi += pad;
+    const slots = []; for (let i = 0; i < 48; i++) slots.push(`${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+    const x = scale(0, 48, L, w - R), y = scale(lo, hi, h - B, T);
+    svg.setAttribute("aria-label", "Average markout five seconds after fill, by half hour of the day");
+    const [cs, ce] = meta.core_hours.map((s) => { const [a, b] = s.split(":").map(Number); return a * 2 + b / 30; });
+    el("rect", { x: x(cs), y: T, width: x(ce) - x(cs), height: h - B - T, class: "band" }, svg);
+    const g = el("g", { class: "grid" }, svg), ax = el("g", { class: "ax" }, svg);
+    for (const v of ticks(lo, hi, 4)) { el("line", { x1: L, x2: w - R, y1: y(v), y2: y(v) }, g); txt(ax, L - 6, y(v) + 4, `${v < 0 ? MINUS : v > 0 ? "+" : ""}${Math.abs(v)}¢`, "lbl", "end"); }
+    const every = w < 480 ? 12 : 6;
+    for (let i = 0; i <= 48; i += every) txt(ax, x(i), h - 6, i === 48 ? "24:00" : slots[i], "lbl", i === 0 ? "start" : i === 48 ? "end" : "middle");
+    const bw = Math.min(14, (x(1) - x(0)) - 2);
+    const bySlot = Object.fromEntries(rows.map((r) => [r.slot, r]));
+    slots.forEach((s, i) => {
+      const r = bySlot[s]; if (!r || r.mk5_c == null) return;
+      const cx = x(i + 0.5), y0 = y(0), y1 = y(r.mk5_c), top = Math.min(y0, y1), hgt = Math.max(1, Math.abs(y1 - y0));
+      const rad = Math.min(4, hgt / 2, bw / 2);
+      // rounded at the data end, square at the baseline
+      const xl = cx - bw / 2, xr = cx + bw / 2;
+      const d = r.mk5_c >= 0
+        ? `M${xl} ${y0} V${top + rad} Q${xl} ${top} ${xl + rad} ${top} H${xr - rad} Q${xr} ${top} ${xr} ${top + rad} V${y0} Z`
+        : `M${xl} ${y0} V${y1 - rad} Q${xl} ${y1} ${xl + rad} ${y1} H${xr - rad} Q${xr} ${y1} ${xr} ${y1 - rad} V${y0} Z`;
+      el("path", { d, class: r.regime === "core" ? "f1" : "f2" }, svg);
+      const hit = el("rect", { x: x(i), y: T, width: x(i + 1) - x(i), height: h - B - T, class: "hit" }, svg);
+      hit.addEventListener("pointermove", (e) => showTip(e, `<b>${s}–${slots[i + 1] || "24:00"} ET</b> · ${r.regime === "core" ? "core hours" : "off-hours"}<br>Markout 5 s <span class="m">${cents(r.mk5_c)}</span><br>${r.fills} fills · P&amp;L <span class="m">${money(r.pnl)}</span>`));
+      hit.addEventListener("pointerleave", hideTip);
+    });
+    el("line", { x1: L, x2: w - R, y1: y(0), y2: y(0), class: "base" }, svg);
+    $("#hh-table").innerHTML = rows.map((r) => `<tr><td class="m">${r.slot}</td><td>${r.regime === "core" ? "Core" : "Off-hours"}</td><td class="r">${r.fills}</td><td class="r m ${cls(r.mk5_c)}">${cents(r.mk5_c)}</td><td class="r m ${cls(r.pnl)}">${money(r.pnl)}</td></tr>`).join("");
+  }
+
+  // ---------------------------------------------------------------- seeds
+  function strip(node, rowsSpec, fmt, unitTicks) {
+    const { svg, w, h } = svgFor(node, 64 + rowsSpec.length * 52);
+    const L = 112, R = 16, T = 10, B = 24;
+    const all = rowsSpec.flatMap((r) => r.vals.map((v) => v.v)).concat([0]);
+    let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+    const x = scale(lo, hi, L, w - R);
+    const g = el("g", { class: "grid" }, svg), ax = el("g", { class: "ax" }, svg);
+    for (const v of ticks(lo, hi, w < 480 ? 3 : 5)) { el("line", { x1: x(v), x2: x(v), y1: T, y2: h - B }, g); txt(ax, x(v), h - 6, unitTicks(v), "lbl", "middle"); }
+    el("line", { x1: x(0), x2: x(0), y1: T, y2: h - B, class: "base" }, svg);
+    const rowH = (h - B - T) / rowsSpec.length;
+    rowsSpec.forEach((r, k) => {
+      const cy = T + rowH * (k + 0.5);
+      txt(svg, 4, cy - 2, r.label, "lbl ink");
+      txt(svg, 4, cy + 12, r.sub, "lbl");
+      const mean = r.vals.reduce((s, v) => s + v.v, 0) / r.vals.length;
+      el("line", { x1: x(mean), x2: x(mean), y1: cy - 14, y2: cy + 14, class: "meanmk" }, svg);
+      r.vals.forEach((v, j) => {
+        const jy = cy + ((j % 5) - 2) * 3.2;
+        el("circle", { cx: x(v.v), cy: jy, r: 5, class: r.dot }, svg);
+        const hit = el("circle", { cx: x(v.v), cy: jy, r: 11, class: "hit" }, svg);
+        hit.addEventListener("pointermove", (e) => showTip(e, `<b>Seed ${v.seed}</b> · ${r.label}<br><span class="m">${fmt(v.v)}</span>`));
+        hit.addEventListener("pointerleave", hideTip);
+      });
+      txt(svg, x(mean), cy - 18, `mean ${fmt(mean)}`, "lbl ink", "middle");
+    });
+  }
+  function drawSeeds() {
+    if (!seeds.length) { $("#seeds-sec").hidden = true; return; }
+    const offMkOf = (r) => ((r.ungated.by_regime.off_hours || {}).markout_c || {})["5"];
+    const mkRows = [
+      { label: "Gated", sub: "core hours", dot: "dot1", vals: seeds.map((r) => ({ seed: r.seed, v: r.gated.markout_c["5"] })) },
+      { label: "Ungated", sub: "off-hours fills", dot: "dot2", vals: seeds.filter((r) => offMkOf(r) != null).map((r) => ({ seed: r.seed, v: offMkOf(r) })) },
+    ];
+    const retRows = [
+      { label: "Gated", sub: "all fills", dot: "dot1", vals: seeds.map((r) => ({ seed: r.seed, v: r.gated.ret })) },
+      { label: "Ungated", sub: "all fills", dot: "dot2", vals: seeds.map((r) => ({ seed: r.seed, v: r.ungated.ret })) },
+    ];
+    strip($("#seeds-mk"), mkRows, (v) => cents(v), (v) => `${v < 0 ? MINUS : v > 0 ? "+" : ""}${Math.abs(v)}¢`);
+    strip($("#seeds-ret"), retRows, (v) => pct(v), (v) => `${v < 0 ? MINUS : v > 0 ? "+" : ""}${Math.round(Math.abs(v) * 100)}%`);
+    const n = seeds.length;
+    const gPos = seeds.filter((r) => r.gated.markout_c["5"] > 0).length;
+    const oNeg = seeds.filter((r) => offMkOf(r) < 0).length;
+    const gRet = seeds.filter((r) => r.gated.ret > 0).length, uRet = seeds.filter((r) => r.ungated.ret > 0).length;
+    const offOff = seeds.filter((r) => (r.ungated.disabled || []).some((d) => d.startsWith("lag_momentum@off"))).length;
+    const coreOff = seeds.filter((r) => (r.gated.disabled || []).concat(r.ungated.disabled || []).some((d) => d.endsWith("@core"))).length;
+    $("#seeds-p").textContent = `${n} seeds, each a different two-day world with its own prices, books and public trades. Two-day returns land on both sides of zero for both configurations (${gRet} of ${n} gated runs positive, ${uRet} of ${n} ungated). Markouts don't overlap: positive in core hours in ${gPos} of ${n} worlds, negative off-hours in ${oNeg} of ${n}. Judging signals on markouts, the decay monitor switched lag_momentum off for off-hours in ${offOff} of ${n} ungated runs, and switched off a core-hours signal in ${coreOff} of ${n}.`;
+    $("#seeds-table").innerHTML = seeds.map((r) => `<tr><td class="m">${r.seed}</td><td class="r m ${cls(r.gated.markout_c["5"])}">${cents(r.gated.markout_c["5"])}</td><td class="r m ${cls(r.gated.ret)}">${pct(r.gated.ret)}</td><td class="r m ${cls(offMkOf(r))}">${cents(offMkOf(r))}</td><td class="r m ${cls(r.ungated.ret)}">${pct(r.ungated.ret)}</td><td class="m">${(r.ungated.disabled || []).join(", ") || "–"}</td></tr>`).join("");
+  }
+
+  // ---------------------------------------------------------------- edge text, engine
+  const offPnl = (U.by_regime.off_hours || {}).pnl || 0;
+  $("#edge-p").textContent = `The same simulated world traded two ways. The gated run trades 09:30–16:00 ET only. The ungated run trades around the clock${U.total.pnl > G.total.pnl ? ", and on this seed it finished with more money" : ""}. Its off-hours fills made ${money(offPnl)}, yet their markouts were negative: outside core hours the simulator's book is set by traders who are ahead of the public price, so the gaps the engine sees there are traps. Over two days, a handful of 15-minute outcomes can hide that.`;
+
+  const e = G.engine;
+  $("#funnel").innerHTML = [["events", e.events], ["evaluations", e.evaluations], ["decisions", e.decisions], ["orders", e.orders], ["fills", e.fills]]
+    .map(([k, v], i) => `${i ? '<span class="arrow" aria-hidden="true">→</span>' : ""}<span><b>${num(v)}</b> ${k}</span>`).join("");
+  const blk = Object.entries(e.blocked).slice(0, 7).map(([k, v]) => `${k.replace(/_/g, " ")} ${num(v)}`).join(" · ");
+  $("#blocked").textContent = `Evaluations skipped or orders blocked: ${blk}. ${num(e.gated_by_regime)} evaluations fell outside core hours. ${e.unfilled_orders} orders went unfilled because the book moved past the limit before they arrived.`;
+  const sigs = G.by_signal_when_agreeing;
+  $("#sig-table").innerHTML = Object.keys(sigs).map((k) => { const s = sigs[k], mk = s.markout_c || {}; return `<tr><td class="m">${k}</td><td class="r">${s.trades}</td><td class="r m ${cls(mk["5"])}">${cents(mk["5"])}</td><td class="r m ${cls(mk["30"])}">${cents(mk["30"])}</td><td class="r m ${cls(s.ret_per_dollar)}">${pct(s.ret_per_dollar)}</td></tr>`; }).join("");
+  const mon = U.monitor_events;
+  $("#monitor").innerHTML = mon.length ? mon.map((m) => `<li><span class="t">${m.time}</span><span class="pill ${m.action === "disabled" ? "bad" : "good"}">${m.action === "disabled" ? "off" : "on"}</span><span><span class="mono">${m.signal}</span> in ${m.regime.replace("_", "-")}${m.action === "disabled" ? ` <span class="muted">(mean ${cents(100 * m.mean_metric)} over ${m.samples} markets)</span>` : ""}</span></li>`).join("") : "<li>No signal was switched off.</li>";
+  $("#gen").textContent = `Generated ${meta.generated} by python -m pmbot.demo (seed ${meta.seed}, ${meta.days} days${seeds.length ? `, ${seeds.length}-seed batch` : ""}).`;
+
+  // ---------------------------------------------------------------- boot + resize
+  function drawAll() { if (cur) { drawFull(); drawUnder(); drawZoom(); } drawEquity(); drawHalfHours(); drawSeeds(); }
+  if (markets.length) select(0);
+  else { document.querySelector("#rp-h").closest("section").hidden = true; }
+  drawEquity(); drawHalfHours(); drawSeeds();
+  let rw = 0;
+  new ResizeObserver(() => { const nw = document.body.clientWidth; if (nw !== rw) { rw = nw; drawAll(); } }).observe(document.body);
+  if (reduceMotion) { /* playback is user-started; nothing animates on its own */ }
+})();
+</script>
