@@ -279,6 +279,37 @@ def _pick_showcase(bot: RecordingBot, regime: str, clear: int, by_pnl: int, wors
     return [m for m in picks if not (m in seen or seen.add(m))]
 
 
+def _pick_tour(bot: RecordingBot) -> tuple[str, int] | None:
+    """One clean example for the page's guided walkthrough.
+
+    A market-hours YES buy where the gap to the book was clear (3c+), the 5 s
+    markout was typical (2-8c), and both the trade and the market made money, so a
+    first-time viewer sees the mechanism without having to untangle luck as well.
+    """
+    by_order: dict[int, list] = {}
+    for tr in bot.portfolio.trades:
+        by_order.setdefault(tr.order_id, []).append(tr)
+    best: tuple[float, str, int] | None = None
+    for mid, tape in bot.kept.items():
+        market_pnl = sum(t.pnl or 0.0 for t in bot.portfolio.trades if t.market_id == mid)
+        if market_pnl <= 0:
+            continue
+        for o in tape.orders:
+            fills = by_order.get(o["id"])
+            if o["regime"] != "core" or o["side"] != "YES" or not fills:
+                continue
+            i = int(o["t"])
+            fair, mk = tape.fair[i], fills[0].markouts.get(5)
+            if fair is None or mk is None or o["t"] + 7 > len(tape.fair) - 1:
+                continue
+            gap = fair - tape.ask[i]
+            if gap < 0.03 or not 0.02 <= mk <= 0.08 or sum(t.pnl or 0.0 for t in fills) <= 0:
+                continue
+            if best is None or mk > best[0]:
+                best = (mk, mid, o["id"])
+    return (best[1], best[2]) if best else None
+
+
 def _equity(bot: RecordingBot, env: SimulatedEnvironment) -> list[list[float]]:
     pts, cum = [[0.0, 0.0]], 0.0
     for ts, pnl in sorted(bot.settlements):
@@ -330,10 +361,11 @@ def build(
 
     # core: the 3 clearest lag captures, then the 2 biggest losers (markouts don't make every trade win)
     # off-hours: the 3 clearest traps, then the biggest winner (P&L can look fine on a bad trade)
-    showcase = [
-        _market_payload(gated.kept[m], gated, env, "gated")
-        for m in _pick_showcase(gated, "core", clear=3, by_pnl=2, worst_markout=False)
-    ] + [
+    tour = _pick_tour(gated)
+    core_ids = _pick_showcase(gated, "core", clear=3, by_pnl=2, worst_markout=False)
+    if tour and tour[0] not in core_ids:
+        core_ids.insert(0, tour[0])
+    showcase = [_market_payload(gated.kept[m], gated, env, "gated") for m in core_ids] + [
         _market_payload(ungated.kept[m], ungated, env, "ungated")
         for m in _pick_showcase(ungated, "off_hours", clear=3, by_pnl=1, worst_markout=True)
     ]
@@ -374,6 +406,7 @@ def build(
         },
         "core_bands": core_bands,
         "markets": showcase,
+        "tour": {"market": tour[0], "order": tour[1]} if tour else None,
         "seeds": [],
     }
     if seeds:

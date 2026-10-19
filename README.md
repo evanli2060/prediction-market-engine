@@ -1,18 +1,14 @@
 # prediction-market-engine
 
-An event-driven trading engine for short-duration binary prediction markets ("will BTC be above its opening price in 15 minutes?"), with a deterministic market simulator to run it against.
+**In plain English:** prediction markets let people trade on yes-or-no questions, like *"Will Bitcoin be higher 15 minutes from now?"* A YES share pays $1 if the answer is yes and nothing if it's no, so its price works like a probability: 60¢ means the market thinks there's about a 60% chance. When Bitcoin's price moves, those share prices should move too, but they often update a few seconds late. This bot watches the live coin price, works out what a share should be worth, and buys when the market hasn't caught up yet. It's like seeing a goal on the live broadcast before the sportsbook updates its odds.
 
-This is a **clean-room template** of the architecture behind an automated trading system I built and ran on crypto prediction markets from December 2025 to April 2026. The production system was sold, so its code, tuned parameters, account lists and venue integration are not here. What is here is the same structure, rewritten from scratch: the signal families, how they're combined, the risk and execution layers, the monitoring that kept the strategy honest, and a simulator that reproduces the market features the strategy depended on.
+[![The bot spots a stale price, buys, and the market catches up](docs/demo.gif)](https://evanli2060.github.io/prediction-market-engine/)
 
-Every number in `config.py` is a placeholder chosen so the simulator runs end to end.
+**[Open the interactive demo →](https://evanli2060.github.io/prediction-market-engine/)** It walks through one trade step by step, then lets you replay any simulated market.
 
-## Demo
+**What the simulations show:** profit over a couple of days is mostly luck, because every trade is a 15-minute yes-or-no bet. The better test is whether the market moves the bot's way in the seconds right after it buys. During US stock market hours it does, in all 10 simulated worlds. After hours the opposite happens, because the traders setting prices then know more than the bot does, and the bot's self-check learns to stop trading at those times on its own.
 
-**[Live demo](https://evanli2060.github.io/prediction-market-engine/demo.html)**: a self-contained page ([`docs/demo.html`](docs/demo.html)) that replays a simulated run. Pick a market, press Play, and watch the engine's fair price move ahead of a lagging order book while it trades.
-
-[![Demo: replaying a simulated market](docs/demo.png)](https://evanli2060.github.io/prediction-market-engine/demo.html)
-
-Rebuild it with `python -m pmbot.demo --seeds 10 --out docs/demo.html` (about two minutes).
+**About this repository:** it's a rebuilt template of a trading system I built and ran on crypto prediction markets from December 2025 to April 2026. The original was sold, so its code, tuned settings and account lists aren't here. This version reproduces the design from scratch and runs against a simulator; every number in `config.py` is a placeholder. The rest of this page is for engineers.
 
 ## Quick start
 
@@ -23,7 +19,7 @@ pip install -e ".[dev]"            # or just: export PYTHONPATH=src
 python -m pmbot.cli                # 2 simulated days, time-of-day gating on
 python -m pmbot.cli --no-regime    # trade around the clock and compare
 python -m pmbot.cli --seeds 10     # distribution across 10 simulated worlds
-python -m pmbot.demo               # build the HTML replay page
+python -m pmbot.demo --seeds 10    # rebuild docs/index.html, the demo page (~2 min)
 pytest
 ```
 
@@ -90,9 +86,9 @@ State updates are O(1) amortized per event, so a full decision takes about 0.05 
 
 ## Results in simulation
 
-Ten seeds, two simulated days each, the same worlds traded gated (09:30–16:00 ET) and ungated:
+Ten seeds (simulated worlds), two simulated days each, each world traded two ways: market hours only (09:30–16:00 ET, "gated") and around the clock ("ungated"). A *markout* is how far the market price moved in the bot's favor after it bought, in cents per share. It shows whether the bot bought before the market caught up, without waiting for the 15-minute outcome.
 
-| | Gated | Ungated |
+| | Market hours only (gated) | Around the clock (ungated) |
 |---|---|---|
 | Markout 5 s after fill | +1.31 to +1.72¢ per contract, positive in **10 / 10** seeds | core hours +1.03 to +2.04¢; off-hours **−0.97 to −1.85¢, negative in 10 / 10** |
 | Two-day return per $ risked | mean +0.3%, 6 / 10 positive (range −13% to +15%) | mean +0.0%, 5 / 10 positive (range −17% to +14%) |
@@ -131,7 +127,8 @@ src/pmbot/
   demo/                builds the HTML replay page
   cli.py
 tests/                 unit, regression, record/replay and determinism tests
-docs/demo.html         the replay page; docs/DESIGN_NOTES.md: how the design evolved
+docs/index.html        the demo page (served by GitHub Pages); demo.gif: the README animation
+docs/DESIGN_NOTES.md   how the design evolved
 ```
 
 ## Going live

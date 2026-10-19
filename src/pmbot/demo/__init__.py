@@ -1,6 +1,6 @@
 """Build a self-contained HTML page that replays a simulated run.
 
-python -m pmbot.demo                 # writes demo.html
+python -m pmbot.demo                 # writes docs/index.html
 python -m pmbot.demo --seeds 10      # adds the 10-world comparison (a few minutes)
 """
 
