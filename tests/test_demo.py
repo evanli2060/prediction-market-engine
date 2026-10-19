@@ -12,7 +12,7 @@ def test_demo_builds_and_embeds_its_data():
     assert data["runs"]["ungated"]["half_hours"]
 
     page = render(data)
-    assert page.startswith("<!doctype html>") and "<title>pm-signal-engine</title>" in page
+    assert page.startswith("<!doctype html>") and "<title>prediction-market-engine</title>" in page
     assert "/*__DEMO_DATA__*/" not in page
     embedded = page.split("const DATA = ", 1)[1].split(";\n", 1)[0]
     assert json.loads(embedded.replace("<\\/", "</"))["meta"]["seed"] == 3

@@ -1,4 +1,4 @@
-# pm-signal-engine
+# prediction-market-engine
 
 An event-driven trading engine for short-duration binary prediction markets ("will BTC be above its opening price in 15 minutes?"), with a deterministic market simulator to run it against.
 
@@ -8,9 +8,9 @@ Every number in `config.py` is a placeholder chosen so the simulator runs end to
 
 ## Demo
 
-[`docs/demo.html`](docs/demo.html) is a self-contained page that replays a simulated run: pick a market, press Play, and watch the engine's fair price move ahead of a lagging order book while it trades. To host it, enable GitHub Pages for the `docs/` folder.
+**[Live demo](https://evanli2060.github.io/prediction-market-engine/demo.html)**: a self-contained page ([`docs/demo.html`](docs/demo.html)) that replays a simulated run. Pick a market, press Play, and watch the engine's fair price move ahead of a lagging order book while it trades.
 
-[![Demo: replaying a simulated market](docs/demo.png)](docs/demo.html)
+[![Demo: replaying a simulated market](docs/demo.png)](https://evanli2060.github.io/prediction-market-engine/demo.html)
 
 Rebuild it with `python -m pmbot.demo --seeds 10 --out docs/demo.html` (about two minutes).
 

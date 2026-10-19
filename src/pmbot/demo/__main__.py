@@ -10,7 +10,7 @@ from . import build, render
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="python -m pmbot.demo", description="Build the HTML replay page.")
-    ap.add_argument("--out", default="pmbot-demo.html", help="where to write the page")
+    ap.add_argument("--out", default="demo.html", help="where to write the page")
     ap.add_argument("--seed", type=int, default=10)
     ap.add_argument("--days", type=float, default=2.0)
     ap.add_argument("--latency", type=float, default=0.8)
